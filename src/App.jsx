@@ -1,39 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-
-// ─── Storage via JSONBin.io (free, no auth required to read/write a bin) ────
-// We use a single shared bin. The bin ID is set once on first run and saved to localStorage.
-// All brothers share the same bin via the BIN_ID stored in the app.
-
-const JSONBIN_BASE = "https://api.jsonbin.io/v3/b";
-// Public read/write bin — created on first launch and ID stored in localStorage
-const LOCAL_BIN_KEY = "fc_bin_id";
-const LOCAL_NAME_KEY = "fc_my_name";
-
-async function createBin(initialData) {
-  const res = await fetch(JSONBIN_BASE, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Bin-Private": "false" },
-    body: JSON.stringify(initialData),
-  });
-  const json = await res.json();
-  return json.metadata?.id || null;
-}
-
-async function readBin(binId) {
-  const res = await fetch(`${JSONBIN_BASE}/${binId}/latest`);
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json.record || null;
-}
-
-async function writeBin(binId, data) {
-  const res = await fetch(`${JSONBIN_BASE}/${binId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
-  return res.ok;
-}
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const VERSES = [
@@ -85,117 +51,179 @@ const MOODS = [
 ];
 const MOOD_LABELS = { strong: "Standing strong", good: "Good & grateful", neutral: "Holding on", hard: "Hard day" };
 
-function calcStreak(days, currentDay) {
-  let s = 0;
-  for (let d = currentDay; d >= 1; d--) {
-    if (days[d]?.complete) s++; else break;
+function calcStreak(checkins) {
+  if (!checkins || checkins.length === 0) return 0;
+  const sorted = [...checkins].sort((a, b) => b.day_number - a.day_number);
+  let streak = 0;
+  let expected = sorted[0].day_number;
+  for (const c of sorted) {
+    if (c.day_number === expected && c.complete) { streak++; expected--; }
+    else break;
   }
-  return s;
+  return streak;
 }
 
-// ─── SCREENS ─────────────────────────────────────────────────────────────────
-
+// ─── Spinner ─────────────────────────────────────────────────────────────────
 function Spinner({ color = "#4ade80" }) {
   return (
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
-      <div style={{ width: 32, height: 32, border: `2px solid #1a1a1a`, borderTop: `2px solid ${color}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+      <div style={{ width: 32, height: 32, border: "2px solid #1a1a1a", borderTop: `2px solid ${color}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <div style={{ fontSize: 12, color: "#333", letterSpacing: 2, fontFamily: "Georgia, serif" }}>Loading...</div>
     </div>
   );
 }
 
-function HomePick({ onBrother, onLeader }) {
+// ─── Auth Screen ─────────────────────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState("login"); // login | signup
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [isChallenge, setIsChallenge] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
+
+  async function handleSubmit() {
+    setError(""); setLoading(true);
+    if (mode === "signup") {
+      if (!name.trim()) { setError("Please enter your name."); setLoading(false); return; }
+      const { data, error: err } = await supabase.auth.signUp({
+        email, password,
+        options: { data: { full_name: name.trim(), is_challenge: isChallenge, is_leader: false } }
+      });
+      if (err) { setError(err.message); setLoading(false); return; }
+      // Insert profile
+      if (data.user) {
+        await supabase.from("profiles").upsert({ id: data.user.id, full_name: name.trim(), is_challenge: isChallenge, is_leader: false, current_day: 1 });
+      }
+      setConfirmSent(true);
+    } else {
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) { setError(err.message); }
+    }
+    setLoading(false);
+  }
+
+  if (confirmSent) return (
+    <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24, textAlign: "center" }}>
+      <div style={{ fontSize: 32, marginBottom: 16 }}>✉️</div>
+      <div style={{ fontSize: 18, color: "#f0ede6", marginBottom: 8 }}>Check your email</div>
+      <div style={{ fontSize: 13, color: "#444", maxWidth: 280, lineHeight: 1.7 }}>We sent a confirmation link to <span style={{ color: "#4ade80" }}>{email}</span>. Click it to activate your account, then come back and log in.</div>
+      <button onClick={() => { setConfirmSent(false); setMode("login"); }} style={{ marginTop: 24, background: "none", border: "1px solid #1e1e1e", color: "#4ade80", padding: "10px 24px", borderRadius: 8, fontSize: 13, cursor: "pointer", letterSpacing: 1 }}>Back to login</button>
+    </div>
+  );
+
   return (
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
       <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>30-Day Freedom Challenge</div>
-      <div style={{ fontSize: 24, color: "#f0ede6", marginBottom: 6 }}>Walking in the Spirit</div>
-      <div style={{ fontSize: 13, color: "#444", marginBottom: 40, textAlign: "center", maxWidth: 280, lineHeight: 1.8 }}>
-        A brotherhood accountability tracker.<br />Each man checks in daily.
+      <div style={{ fontSize: 22, color: "#f0ede6", marginBottom: 6 }}>Walking in the Spirit</div>
+      <div style={{ fontSize: 13, color: "#444", marginBottom: 32, textAlign: "center", maxWidth: 280, lineHeight: 1.7 }}>
+        {mode === "login" ? "Sign in to your account to continue your journey." : "Create your account to begin the challenge."}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 300 }}>
-        <button onClick={onBrother} style={{ background: "#0a1f10", border: "1px solid #1a4a28", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left", transition: "border-color 0.15s" }}>
-          <div style={{ fontSize: 14, color: "#4ade80", letterSpacing: 0.5, marginBottom: 5 }}>I'm a brother on the journey</div>
-          <div style={{ fontSize: 12, color: "#1a4020", lineHeight: 1.5 }}>Daily check-ins, Scripture, and streak tracking</div>
+      <div style={{ width: "100%", maxWidth: 300 }}>
+        {mode === "signup" && (
+          <>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your first name"
+              style={{ width: "100%", background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", color: "#f0ede6", fontSize: 14, fontFamily: "Georgia, serif", marginBottom: 10, boxSizing: "border-box" }} />
+          </>
+        )}
+        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address" type="email"
+          style={{ width: "100%", background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", color: "#f0ede6", fontSize: 14, fontFamily: "Georgia, serif", marginBottom: 10, boxSizing: "border-box" }} />
+        <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Password" type="password"
+          onKeyDown={e => e.key === "Enter" && handleSubmit()}
+          style={{ width: "100%", background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "12px 16px", color: "#f0ede6", fontSize: 14, fontFamily: "Georgia, serif", marginBottom: 14, boxSizing: "border-box" }} />
+        {mode === "signup" && (
+          <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, cursor: "pointer" }} onClick={() => setIsChallenge(c => !c)}>
+            <div style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${isChallenge ? "#fbbf24" : "#2a2a2a"}`, background: isChallenge ? "#3d2a00" : "#111", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {isChallenge && <div style={{ width: 10, height: 10, background: "#fbbf24", borderRadius: 2 }} />}
+            </div>
+            <span style={{ fontSize: 12, color: "#666", lineHeight: 1.5 }}>I'm on the $100/day money challenge</span>
+          </label>
+        )}
+        {error && <div style={{ color: "#f87171", fontSize: 12, marginBottom: 12, textAlign: "center" }}>{error}</div>}
+        <button onClick={handleSubmit} disabled={loading}
+          style={{ width: "100%", background: "#14532d", border: "none", color: "#4ade80", borderRadius: 10, padding: 15, fontSize: 14, cursor: loading ? "default" : "pointer", letterSpacing: 1, fontFamily: "Georgia, serif", opacity: loading ? 0.7 : 1, marginBottom: 14 }}>
+          {loading ? "Please wait..." : mode === "login" ? "Sign in →" : "Create account →"}
         </button>
-        <button onClick={onLeader} style={{ background: "#0b1220", border: "1px solid #1a2a40", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
-          <div style={{ fontSize: 14, color: "#60a5fa", letterSpacing: 0.5, marginBottom: 5 }}>I'm the accountability leader</div>
+        <div style={{ textAlign: "center", fontSize: 12, color: "#444" }}>
+          {mode === "login" ? "No account yet? " : "Already have an account? "}
+          <span onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }} style={{ color: "#4ade80", cursor: "pointer" }}>
+            {mode === "login" ? "Sign up" : "Sign in"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Role Picker ──────────────────────────────────────────────────────────────
+function RolePicker({ profile, onPick, onSignOut }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
+      <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>30-Day Freedom Challenge</div>
+      <div style={{ fontSize: 20, color: "#f0ede6", marginBottom: 4 }}>Welcome, {profile?.full_name}</div>
+      <div style={{ fontSize: 13, color: "#444", marginBottom: 36 }}>Choose your view</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 300 }}>
+        <button onClick={() => onPick("brother")} style={{ background: "#0a1f10", border: "1px solid #1a4a28", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 14, color: "#4ade80", letterSpacing: 0.5, marginBottom: 5 }}>My daily check-in</div>
+          <div style={{ fontSize: 12, color: "#1a4020", lineHeight: 1.5 }}>Log today, track your streak, read Scripture</div>
+        </button>
+        <button onClick={() => onPick("leader")} style={{ background: "#0b1220", border: "1px solid #1a2a40", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 14, color: "#60a5fa", letterSpacing: 0.5, marginBottom: 5 }}>Leader dashboard</div>
           <div style={{ fontSize: 12, color: "#1a2a40", lineHeight: 1.5 }}>View all brothers, progress, and challenge funds</div>
         </button>
       </div>
+      <button onClick={onSignOut} style={{ marginTop: 32, background: "none", border: "none", color: "#333", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>Sign out</button>
     </div>
   );
 }
 
-function Onboarding({ onEnter }) {
-  const [name, setName] = useState("");
-  const [isChallenge, setIsChallenge] = useState(false);
-  return (
-    <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
-      <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>Welcome, brother</div>
-      <div style={{ fontSize: 20, color: "#f0ede6", marginBottom: 6 }}>Enter your name</div>
-      <div style={{ fontSize: 13, color: "#444", marginBottom: 32, textAlign: "center", maxWidth: 280, lineHeight: 1.7 }}>Your journey will be saved and your leader will be able to see your progress.</div>
-      <div style={{ width: "100%", maxWidth: 300 }}>
-        <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && name.trim() && onEnter(name.trim(), isChallenge)}
-          placeholder="Your first name"
-          style={{ width: "100%", background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: "13px 16px", color: "#f0ede6", fontSize: 15, fontFamily: "Georgia, serif", marginBottom: 14, boxSizing: "border-box" }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24, cursor: "pointer" }} onClick={() => setIsChallenge(c => !c)}>
-          <div style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${isChallenge ? "#fbbf24" : "#2a2a2a"}`, background: isChallenge ? "#3d2a00" : "#111", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            {isChallenge && <div style={{ width: 10, height: 10, background: "#fbbf24", borderRadius: 2 }} />}
-          </div>
-          <span style={{ fontSize: 12, color: "#666", lineHeight: 1.5 }}>I'm on the $100/day money challenge</span>
-        </label>
-        <button onClick={() => name.trim() && onEnter(name.trim(), isChallenge)} disabled={!name.trim()}
-          style={{ width: "100%", background: name.trim() ? "#14532d" : "#0a1a0f", border: "none", color: name.trim() ? "#4ade80" : "#1a3a1a", borderRadius: 10, padding: 15, fontSize: 14, cursor: name.trim() ? "pointer" : "default", letterSpacing: 1, fontFamily: "Georgia, serif" }}>
-          Begin my journey →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function BrotherView({ name, brotherData, onSave, onSwitch }) {
-  const days = brotherData?.days || {};
-  const currentDay = brotherData?.currentDay || 1;
-  const isChallenge = brotherData?.isChallenge || false;
+// ─── Brother View ─────────────────────────────────────────────────────────────
+function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
+  const currentDay = profile?.current_day || 1;
+  const isChallenge = profile?.is_challenge || false;
   const [tab, setTab] = useState("today");
   const [mood, setMood] = useState(null);
   const [note, setNote] = useState("");
   const [temptationVerse, setTemptationVerse] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  const todayEntry = days[currentDay];
-  const saved = !!todayEntry?.complete;
+  const todayCheckin = checkins.find(c => c.day_number === currentDay);
+  const saved = !!todayCheckin?.complete;
   const verse = VERSES[(currentDay - 1) % 30];
-  const completedCount = Object.values(days).filter(d => d?.complete).length;
-  const streak = calcStreak(days, currentDay);
+  const completedCount = checkins.filter(c => c.complete).length;
+  const streak = calcStreak(checkins);
 
   function handleTemptation() {
     const v = TEMPTATION_VERSES[Math.floor(Math.random() * TEMPTATION_VERSES.length)];
     setTemptationVerse(v);
-    const updated = { ...days, [currentDay]: { ...(days[currentDay] || {}), temptation: true } };
-    onSave({ ...brotherData, days: updated });
+    onSave({ dayNumber: currentDay, temptation: true, complete: false, mood: null, note: "" }, false);
   }
 
   async function handleSubmit() {
     setSaving(true);
-    const entry = { mood: mood || "good", note, complete: true, temptation: !!(days[currentDay]?.temptation), savedAt: new Date().toISOString() };
-    await onSave({ ...brotherData, days: { ...days, [currentDay]: entry }, lastUpdated: new Date().toISOString() });
+    await onSave({ dayNumber: currentDay, mood: mood || "good", note, complete: true, temptation: !!(todayCheckin?.temptation) }, true);
     setSaving(false);
   }
 
   async function advanceDay() {
     if (currentDay < 30) {
       setMood(null); setNote(""); setTemptationVerse(null);
-      await onSave({ ...brotherData, currentDay: currentDay + 1, lastUpdated: new Date().toISOString() });
+      await supabase.from("profiles").update({ current_day: currentDay + 1 }).eq("id", profile.id);
+      onSwitch("refresh");
     }
   }
 
   return (
     <div style={{ fontFamily: "Georgia, serif", color: "#f0ede6", minHeight: "100vh", background: "#0a0a0a", paddingBottom: 80 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid #141414", background: "#0a0a0a", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ fontSize: 11, color: "#4ade80", letterSpacing: 1 }}>{name}</div>
-        <button onClick={onSwitch} style={{ background: "none", border: "1px solid #1e1e1e", color: "#444", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer", letterSpacing: 1 }}>Switch view</button>
+        <div style={{ fontSize: 11, color: "#4ade80", letterSpacing: 1 }}>{profile?.full_name}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => onSwitch("pick")} style={{ background: "none", border: "1px solid #1e1e1e", color: "#444", padding: "4px 10px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Switch</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
+        </div>
       </div>
       <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #141414" }}>
         <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 4 }}>30-Day Freedom Challenge</div>
@@ -262,7 +290,8 @@ function BrotherView({ name, brotherData, onSave, onSwitch }) {
             <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 14 }}>30-day journey</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 5, marginBottom: 16 }}>
               {Array.from({ length: 30 }, (_, i) => i + 1).map(d => {
-                const e = days[d]; const done = e?.complete, temp = e?.temptation && !done, isToday = d === currentDay;
+                const c = checkins.find(x => x.day_number === d);
+                const done = c?.complete, temp = c?.temptation && !done, isToday = d === currentDay;
                 return <div key={d} style={{ aspectRatio: "1", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, background: done ? "#0f2d18" : temp ? "#2d1a08" : "#111", border: `${isToday ? 2 : 1}px solid ${done ? "#1a4a28" : temp ? "#4a2a10" : isToday ? "#4ade80" : "#1e1e1e"}`, color: done ? "#4ade80" : temp ? "#d97706" : "#333" }}>{d}</div>;
               })}
             </div>
@@ -276,18 +305,18 @@ function BrotherView({ name, brotherData, onSave, onSwitch }) {
         {tab === "log" && (
           <div>
             <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 14 }}>Your journey</div>
-            {Object.entries(days).filter(([,v]) => v?.complete || v?.temptation).length === 0
+            {checkins.filter(c => c.complete || c.temptation).length === 0
               ? <div style={{ color: "#333", fontSize: 14, fontStyle: "italic" }}>No entries yet. Your story begins today.</div>
-              : Object.entries(days).filter(([,v]) => v?.complete || v?.temptation).sort((a,b)=>Number(b[0])-Number(a[0])).map(([d,v]) => (
-                <div key={d} style={{ borderBottom: "1px solid #1a1a1a", paddingBottom: 14, marginBottom: 14 }}>
+              : [...checkins].filter(c => c.complete || c.temptation).sort((a,b)=>b.day_number-a.day_number).map(c => (
+                <div key={c.day_number} style={{ borderBottom: "1px solid #1a1a1a", paddingBottom: 14, marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                    <div style={{ fontSize: 13, color: "#f0ede6" }}>Day {d}</div>
+                    <div style={{ fontSize: 13, color: "#f0ede6" }}>Day {c.day_number}</div>
                     <div style={{ display: "flex", gap: 5 }}>
-                      {v.complete && v.mood && <span style={{ fontSize: 10, color: MOODS.find(m=>m.key===v.mood)?.color||"#aaa", background: "#111", padding: "2px 8px", borderRadius: 999 }}>{MOOD_LABELS[v.mood]}</span>}
-                      {v.temptation && <span style={{ fontSize: 10, color: "#d97706", background: "#1a0f00", padding: "2px 8px", borderRadius: 999 }}>⚠ Temptation</span>}
+                      {c.complete && c.mood && <span style={{ fontSize: 10, color: MOODS.find(m=>m.key===c.mood)?.color||"#aaa", background: "#111", padding: "2px 8px", borderRadius: 999 }}>{MOOD_LABELS[c.mood]}</span>}
+                      {c.temptation && <span style={{ fontSize: 10, color: "#d97706", background: "#1a0f00", padding: "2px 8px", borderRadius: 999 }}>⚠ Temptation</span>}
                     </div>
                   </div>
-                  {v.note ? <div style={{ fontSize: 12, color: "#778", fontStyle: "italic", lineHeight: 1.6, paddingLeft: 8, borderLeft: "2px solid #1a2a1a" }}>{v.note}</div>
+                  {c.note ? <div style={{ fontSize: 12, color: "#778", fontStyle: "italic", lineHeight: 1.6, paddingLeft: 8, borderLeft: "2px solid #1a2a1a" }}>{c.note}</div>
                     : <div style={{ fontSize: 11, color: "#333", fontStyle: "italic" }}>No reflection added.</div>}
                 </div>
               ))}
@@ -298,41 +327,40 @@ function BrotherView({ name, brotherData, onSave, onSwitch }) {
   );
 }
 
-function LeaderView({ allData, onRefresh, onSwitch }) {
-  const brothers = allData?.brothers || {};
+// ─── Leader View ──────────────────────────────────────────────────────────────
+function LeaderView({ profiles, allCheckins, onRefresh, onSwitch, onSignOut }) {
   const [selected, setSelected] = useState(null);
 
-  const brotherList = Object.entries(brothers).map(([name, data]) => {
-    const days = data?.days || {};
-    const currentDay = data?.currentDay || 1;
-    const completedCount = Object.values(days).filter(d => d?.complete).length;
-    const streak = calcStreak(days, currentDay);
-    const todayDone = !!(days[currentDay]?.complete);
-    const temptationCount = Object.values(days).filter(d => d?.temptation).length;
-    const latestMood = days[currentDay]?.mood || days[currentDay - 1]?.mood || null;
-    return { name, data, days, currentDay, completedCount, streak, todayDone, temptationCount, latestMood, isChallenge: data?.isChallenge };
+  const brotherList = profiles.map(p => {
+    const checkins = allCheckins.filter(c => c.user_id === p.id);
+    const completedCount = checkins.filter(c => c.complete).length;
+    const streak = calcStreak(checkins);
+    const todayCheckin = checkins.find(c => c.day_number === p.current_day);
+    const todayDone = !!todayCheckin?.complete;
+    const temptationCount = checkins.filter(c => c.temptation).length;
+    const latestMood = todayCheckin?.mood || checkins.find(c => c.day_number === p.current_day - 1)?.mood || null;
+    return { ...p, checkins, completedCount, streak, todayDone, temptationCount, latestMood };
   });
 
-  const challengeBrother = brotherList.find(b => b.isChallenge);
-  const totalCheckedInToday = brotherList.filter(b => b.todayDone).length;
+  const challengeBrother = brotherList.find(b => b.is_challenge);
+  const totalToday = brotherList.filter(b => b.todayDone).length;
   const needsAttention = brotherList.filter(b => b.temptationCount > 0 || b.latestMood === "hard");
 
   if (selected) {
-    const b = brotherList.find(b => b.name === selected);
+    const b = brotherList.find(b => b.id === selected);
     if (!b) { setSelected(null); return null; }
-    const { days, currentDay, completedCount, streak, isChallenge } = b;
     return (
       <div style={{ fontFamily: "Georgia, serif", color: "#e8eaf0", minHeight: "100vh", background: "#080c14", paddingBottom: 80 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid #10151f", background: "#080c14", position: "sticky", top: 0, zIndex: 10 }}>
-          <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#60a5fa", fontSize: 12, cursor: "pointer", letterSpacing: 1 }}>← All brothers</button>
-          <button onClick={onSwitch} style={{ background: "none", border: "1px solid #1a2540", color: "#334", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer", letterSpacing: 1 }}>Switch view</button>
+          <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#60a5fa", fontSize: 12, cursor: "pointer" }}>← All brothers</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
         </div>
         <div style={{ padding: "20px 20px 0" }}>
           <div style={{ fontSize: 10, letterSpacing: 4, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>Brother detail</div>
-          <div style={{ fontSize: 22, color: "#e8eaf0", marginBottom: isChallenge ? 8 : 16 }}>{selected}</div>
-          {isChallenge && <div style={{ display: "inline-block", background: "#2a1a00", border: "1px solid #4a3000", borderRadius: 999, padding: "3px 12px", fontSize: 11, color: "#fbbf24", marginBottom: 16 }}>💰 $100/day challenge · ${completedCount * 100} of $3,000</div>}
+          <div style={{ fontSize: 22, color: "#e8eaf0", marginBottom: b.is_challenge ? 8 : 16 }}>{b.full_name}</div>
+          {b.is_challenge && <div style={{ display: "inline-block", background: "#2a1a00", border: "1px solid #4a3000", borderRadius: 999, padding: "3px 12px", fontSize: 11, color: "#fbbf24", marginBottom: 16 }}>💰 $100/day challenge · ${b.completedCount * 100} of $3,000</div>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-            {[["Streak", streak,"#4ade80"],["Complete",`${completedCount}/30`,"#60a5fa"],["Temptations",Object.values(days).filter(d=>d?.temptation).length,"#d97706"]].map(([l,v,c]) => (
+            {[["Streak", b.streak, "#4ade80"], ["Complete", `${b.completedCount}/30`, "#60a5fa"], ["Temptations", b.temptationCount, "#d97706"]].map(([l,v,c]) => (
               <div key={l} style={{ background: "#0c1220", border: "1px solid #10151f", borderRadius: 10, padding: 12 }}>
                 <div style={{ fontSize: 10, letterSpacing: 2, color: "#2a3040", textTransform: "uppercase", marginBottom: 6 }}>{l}</div>
                 <div style={{ fontSize: 22, color: c }}>{v}</div>
@@ -343,25 +371,26 @@ function LeaderView({ allData, onRefresh, onSwitch }) {
             <div style={{ fontSize: 10, letterSpacing: 2, color: "#2a3040", textTransform: "uppercase", marginBottom: 12 }}>30-day calendar</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4 }}>
               {Array.from({ length: 30 }, (_, i) => i + 1).map(d => {
-                const e = days[d]; const done = e?.complete, temp = e?.temptation, isToday = d === currentDay;
+                const c = b.checkins.find(x => x.day_number === d);
+                const done = c?.complete, temp = c?.temptation, isToday = d === b.current_day;
                 return <div key={d} style={{ aspectRatio: "1", borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, background: done ? "#0a1f10" : temp ? "#1f0e04" : "#0e1220", border: `${isToday?2:1}px solid ${done?"#1a4a28":temp?"#4a2010":isToday?"#60a5fa":"#141c28"}`, color: done?"#4ade80":temp?"#d97706":"#2a3a50" }}>{d}</div>;
               })}
             </div>
           </div>
           <div style={{ background: "#0c1220", border: "1px solid #10151f", borderRadius: 10, padding: 16 }}>
             <div style={{ fontSize: 10, letterSpacing: 2, color: "#2a3040", textTransform: "uppercase", marginBottom: 12 }}>Check-in log</div>
-            {Object.entries(days).filter(([,v]) => v?.complete || v?.temptation).length === 0
+            {b.checkins.filter(c => c.complete || c.temptation).length === 0
               ? <div style={{ fontSize: 13, color: "#222", fontStyle: "italic" }}>No entries yet.</div>
-              : Object.entries(days).filter(([,v]) => v?.complete || v?.temptation).sort((a,b)=>Number(b[0])-Number(a[0])).map(([d,v]) => (
-                <div key={d} style={{ borderBottom: "1px solid #10151f", paddingBottom: 12, marginBottom: 12 }}>
+              : [...b.checkins].filter(c => c.complete || c.temptation).sort((a,x)=>x.day_number-a.day_number).map(c => (
+                <div key={c.day_number} style={{ borderBottom: "1px solid #10151f", paddingBottom: 12, marginBottom: 12 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <div style={{ fontSize: 13, color: "#e8eaf0" }}>Day {d}</div>
+                    <div style={{ fontSize: 13, color: "#e8eaf0" }}>Day {c.day_number}</div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      {v.complete && v.mood && <span style={{ fontSize: 10, color: MOODS.find(m=>m.key===v.mood)?.color||"#aaa", background: "#0c1220", padding: "2px 8px", borderRadius: 999 }}>{MOOD_LABELS[v.mood]}</span>}
-                      {v.temptation && <span style={{ fontSize: 10, color: "#d97706", background: "#150a00", padding: "2px 8px", borderRadius: 999 }}>⚠</span>}
+                      {c.complete && c.mood && <span style={{ fontSize: 10, color: MOODS.find(m=>m.key===c.mood)?.color||"#aaa", padding: "2px 8px", borderRadius: 999, background: "#0c1220" }}>{MOOD_LABELS[c.mood]}</span>}
+                      {c.temptation && <span style={{ fontSize: 10, color: "#d97706", background: "#150a00", padding: "2px 8px", borderRadius: 999 }}>⚠</span>}
                     </div>
                   </div>
-                  {v.note ? <div style={{ fontSize: 12, color: "#556", fontStyle: "italic", lineHeight: 1.5, paddingLeft: 8, borderLeft: "2px solid #162030" }}>{v.note}</div>
+                  {c.note ? <div style={{ fontSize: 12, color: "#556", fontStyle: "italic", lineHeight: 1.5, paddingLeft: 8, borderLeft: "2px solid #162030" }}>{c.note}</div>
                     : <div style={{ fontSize: 11, color: "#222", fontStyle: "italic" }}>No reflection.</div>}
                 </div>
               ))}
@@ -376,55 +405,54 @@ function LeaderView({ allData, onRefresh, onSwitch }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid #10151f", background: "#080c14", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ fontSize: 10, letterSpacing: 3, color: "#60a5fa" }}>LEADER VIEW</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={onRefresh} style={{ background: "none", border: "1px solid #1a2540", color: "#60a5fa", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer", letterSpacing: 1 }}>Refresh</button>
-          <button onClick={onSwitch} style={{ background: "none", border: "1px solid #1a2540", color: "#334", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer", letterSpacing: 1 }}>Switch view</button>
+          <button onClick={onRefresh} style={{ background: "none", border: "1px solid #1a2540", color: "#60a5fa", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Refresh</button>
+          <button onClick={() => onSwitch("pick")} style={{ background: "none", border: "1px solid #1a2540", color: "#334", padding: "4px 10px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Switch</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
         </div>
       </div>
       <div style={{ padding: "20px 20px 0" }}>
         <div style={{ fontSize: 22, color: "#e8eaf0", marginBottom: 4 }}>Brotherhood</div>
-        <div style={{ fontSize: 12, color: "#2a3040", marginBottom: 20 }}>{brotherList.length} brother{brotherList.length !== 1 ? "s" : ""} on the journey · {totalCheckedInToday} checked in today</div>
+        <div style={{ fontSize: 12, color: "#2a3040", marginBottom: 20 }}>{brotherList.length} brother{brotherList.length !== 1 ? "s" : ""} on the journey · {totalToday} checked in today</div>
         {needsAttention.length > 0 && (
           <div style={{ background: "#150d06", border: "1px solid #3a1e06", borderRadius: 10, padding: 14, marginBottom: 16 }}>
             <div style={{ fontSize: 10, letterSpacing: 3, color: "#d97706", textTransform: "uppercase", marginBottom: 10 }}>⚠ Needs your attention</div>
             {needsAttention.map(b => (
-              <div key={b.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid #2a1a06" }}>
+              <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid #2a1a06" }}>
                 <div>
-                  <div style={{ fontSize: 13, color: "#fbbf24" }}>{b.name}</div>
+                  <div style={{ fontSize: 13, color: "#fbbf24" }}>{b.full_name}</div>
                   <div style={{ fontSize: 11, color: "#7a5020" }}>
                     {b.temptationCount > 0 && `${b.temptationCount} temptation${b.temptationCount > 1 ? "s" : ""} flagged`}
                     {b.temptationCount > 0 && b.latestMood === "hard" && " · "}
                     {b.latestMood === "hard" && "Hard day logged"}
                   </div>
                 </div>
-                <button onClick={() => setSelected(b.name)} style={{ background: "none", border: "1px solid #3a2010", color: "#d97706", padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>View →</button>
+                <button onClick={() => setSelected(b.id)} style={{ background: "none", border: "1px solid #3a2010", color: "#d97706", padding: "4px 12px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>View →</button>
               </div>
             ))}
           </div>
         )}
         {challengeBrother && (
           <div style={{ background: "#0f0c02", border: "1px solid #3a2800", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-            <div style={{ fontSize: 10, letterSpacing: 3, color: "#fbbf24", textTransform: "uppercase", marginBottom: 10 }}>💰 $100/day challenge — {challengeBrother.name}</div>
+            <div style={{ fontSize: 10, letterSpacing: 3, color: "#fbbf24", textTransform: "uppercase", marginBottom: 10 }}>💰 $100/day challenge — {challengeBrother.full_name}</div>
             <div style={{ height: 8, background: "#1a1200", borderRadius: 999, overflow: "hidden", marginBottom: 6 }}>
               <div style={{ height: "100%", width: `${Math.round((challengeBrother.completedCount/30)*100)}%`, background: "#fbbf24", borderRadius: 999 }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#5a4010", marginBottom: 10 }}>
-              <span style={{ color: "#fbbf24" }}>${challengeBrother.completedCount * 100} deposited</span>
-              <span>$3,000 goal</span>
+              <span style={{ color: "#fbbf24" }}>${challengeBrother.completedCount * 100} deposited</span><span>$3,000 goal</span>
             </div>
             <div style={{ fontSize: 11, color: "#4a3808", fontStyle: "italic" }}>"Walk in the Spirit, and you will not fulfill the lust of the flesh." — Galatians 5:16</div>
           </div>
         )}
         <div style={{ fontSize: 10, letterSpacing: 3, color: "#2a3040", textTransform: "uppercase", marginBottom: 12 }}>All brothers</div>
         {brotherList.length === 0
-          ? <div style={{ color: "#222", fontSize: 14, fontStyle: "italic" }}>No brothers have joined yet. Share the link and invite them in.</div>
+          ? <div style={{ color: "#222", fontSize: 14, fontStyle: "italic" }}>No brothers have joined yet.</div>
           : brotherList.map(b => (
-            <button key={b.name} onClick={() => setSelected(b.name)} style={{ width: "100%", background: "#0c1220", border: "1px solid #10151f", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button key={b.id} onClick={() => setSelected(b.id)} style={{ width: "100%", background: "#0c1220", border: "1px solid #10151f", borderRadius: 10, padding: "14px 16px", marginBottom: 10, cursor: "pointer", textAlign: "left", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                  <div style={{ fontSize: 14, color: "#e8eaf0" }}>{b.name}</div>
-                  {b.isChallenge && <span style={{ fontSize: 10, color: "#fbbf24", background: "#2a1a00", padding: "1px 7px", borderRadius: 999 }}>challenge</span>}
-                  {b.todayDone
-                    ? <span style={{ fontSize: 10, color: "#4ade80", background: "#071510", padding: "1px 7px", borderRadius: 999 }}>✓ today</span>
+                  <div style={{ fontSize: 14, color: "#e8eaf0" }}>{b.full_name}</div>
+                  {b.is_challenge && <span style={{ fontSize: 10, color: "#fbbf24", background: "#2a1a00", padding: "1px 7px", borderRadius: 999 }}>challenge</span>}
+                  {b.todayDone ? <span style={{ fontSize: 10, color: "#4ade80", background: "#071510", padding: "1px 7px", borderRadius: 999 }}>✓ today</span>
                     : <span style={{ fontSize: 10, color: "#d97706", background: "#150d06", padding: "1px 7px", borderRadius: 999 }}>not yet</span>}
                 </div>
                 <div style={{ display: "flex", gap: 14 }}>
@@ -441,79 +469,77 @@ function LeaderView({ allData, onRefresh, onSwitch }) {
   );
 }
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
+// ─── Root App ────────────────────────────────────────────────────────────────
 export default function App() {
+  const [session, setSession] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [checkins, setCheckins] = useState([]);
+  const [allProfiles, setAllProfiles] = useState([]);
+  const [allCheckins, setAllCheckins] = useState([]);
   const [screen, setScreen] = useState("loading");
-  const [binId, setBinId] = useState(null);
-  const [allData, setAllData] = useState({ brothers: {} });
-  const [myName, setMyName] = useState(null);
 
   useEffect(() => {
-    async function init() {
-      const savedName = localStorage.getItem(LOCAL_NAME_KEY);
-      let id = localStorage.getItem(LOCAL_BIN_KEY);
-      if (!id) {
-        id = await createBin({ brothers: {} });
-        if (id) localStorage.setItem(LOCAL_BIN_KEY, id);
-      }
-      setBinId(id);
-      if (id) {
-        const data = await readBin(id);
-        if (data) setAllData(data);
-      }
-      if (savedName) setMyName(savedName);
-      setScreen("pick");
-    }
-    init();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) loadProfile(session.user.id);
+      else setScreen("auth");
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) loadProfile(session.user.id);
+      else setScreen("auth");
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  async function refreshData() {
-    if (!binId) return;
-    const data = await readBin(binId);
-    if (data) setAllData(data);
+  async function loadProfile(userId) {
+    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    if (data) { setProfile(data); setScreen("pick"); loadMyCheckins(userId); }
+    else setScreen("auth");
   }
 
-  async function saveBrotherData(name, brotherData) {
-    const updated = { ...allData, brothers: { ...allData.brothers, [name]: brotherData } };
-    setAllData(updated);
-    if (binId) await writeBin(binId, updated);
+  async function loadMyCheckins(userId) {
+    const { data } = await supabase.from("checkins").select("*").eq("user_id", userId);
+    if (data) setCheckins(data);
   }
 
-  async function handleJoin(name, isChallenge) {
-    localStorage.setItem(LOCAL_NAME_KEY, name);
-    setMyName(name);
-    const fresh = await readBin(binId);
-    const base = fresh || allData;
-    if (!base.brothers?.[name]) {
-      const updated = { ...base, brothers: { ...(base.brothers || {}), [name]: { days: {}, currentDay: 1, isChallenge } } };
-      setAllData(updated);
-      if (binId) await writeBin(binId, updated);
+  async function loadAllData() {
+    const [{ data: profiles }, { data: checkins }] = await Promise.all([
+      supabase.from("profiles").select("*"),
+      supabase.from("checkins").select("*")
+    ]);
+    if (profiles) setAllProfiles(profiles);
+    if (checkins) setAllCheckins(checkins);
+  }
+
+  async function handleSaveCheckin({ dayNumber, mood, note, complete, temptation }, isComplete) {
+    const existing = checkins.find(c => c.day_number === dayNumber);
+    const payload = { user_id: session.user.id, day_number: dayNumber, mood: mood || existing?.mood || null, note: note ?? existing?.note ?? "", complete: complete || existing?.complete || false, temptation: temptation || existing?.temptation || false };
+    if (existing) {
+      await supabase.from("checkins").update(payload).eq("id", existing.id);
+      setCheckins(prev => prev.map(c => c.day_number === dayNumber ? { ...c, ...payload } : c));
     } else {
-      setAllData(base);
+      const { data } = await supabase.from("checkins").insert(payload).select().single();
+      if (data) setCheckins(prev => [...prev, data]);
     }
-    setScreen("brother");
+  }
+
+  async function handleSwitch(target) {
+    if (target === "pick") setScreen("pick");
+    else if (target === "refresh") { await loadProfile(session.user.id); setScreen("pick"); }
+    else if (target === "leader") { await loadAllData(); setScreen("leader"); }
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setSession(null); setProfile(null); setCheckins([]); setAllProfiles([]); setAllCheckins([]);
+    setScreen("auth");
   }
 
   if (screen === "loading") return <Spinner />;
-
-  if (screen === "pick") return (
-    <HomePick
-      onBrother={() => {
-        if (myName) setScreen("brother");
-        else setScreen("onboard");
-      }}
-      onLeader={async () => { await refreshData(); setScreen("leader"); }}
-    />
-  );
-
-  if (screen === "onboard") return <Onboarding onEnter={handleJoin} />;
-
-  if (screen === "brother" && myName) {
-    const brotherData = allData.brothers?.[myName] || { days: {}, currentDay: 1 };
-    return <BrotherView name={myName} brotherData={brotherData} onSave={(d) => saveBrotherData(myName, d)} onSwitch={() => setScreen("pick")} />;
-  }
-
-  if (screen === "leader") return <LeaderView allData={allData} onRefresh={refreshData} onSwitch={() => setScreen("pick")} />;
-
+  if (screen === "auth") return <AuthScreen onAuth={() => {}} />;
+  if (screen === "pick") return <RolePicker profile={profile} onPick={async (role) => { if (role === "leader") { await loadAllData(); setScreen("leader"); } else setScreen("brother"); }} onSignOut={handleSignOut} />;
+  if (screen === "brother") return <BrotherView profile={profile} checkins={checkins} onSave={handleSaveCheckin} onSwitch={handleSwitch} onSignOut={handleSignOut} />;
+  if (screen === "leader") return <LeaderView profiles={allProfiles} allCheckins={allCheckins} onRefresh={loadAllData} onSwitch={handleSwitch} onSignOut={handleSignOut} />;
   return null;
 }
