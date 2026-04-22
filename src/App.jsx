@@ -76,44 +76,38 @@ function Spinner({ color = "#4ade80" }) {
 
 // ─── Auth Screen ─────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState("login"); // login | signup
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [isChallenge, setIsChallenge] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [confirmSent, setConfirmSent] = useState(false);
 
   async function handleSubmit() {
     setError(""); setLoading(true);
     if (mode === "signup") {
       if (!name.trim()) { setError("Please enter your name."); setLoading(false); return; }
+      if (password.length < 6) { setError("Password must be at least 6 characters."); setLoading(false); return; }
       const { data, error: err } = await supabase.auth.signUp({
         email, password,
-        options: { data: { full_name: name.trim(), is_challenge: isChallenge, is_leader: false } }
+        options: { data: { full_name: name.trim(), is_challenge: isChallenge } }
       });
       if (err) { setError(err.message); setLoading(false); return; }
-      // Insert profile
       if (data.user) {
-        await supabase.from("profiles").upsert({ id: data.user.id, full_name: name.trim(), is_challenge: isChallenge, is_leader: false, current_day: 1 });
+        await supabase.from("profiles").upsert({
+          id: data.user.id, full_name: name.trim(),
+          is_challenge: isChallenge, is_leader: false, current_day: 1
+        });
+        // Auto sign in immediately after signup
+        await supabase.auth.signInWithPassword({ email, password });
       }
-      setConfirmSent(true);
     } else {
       const { error: err } = await supabase.auth.signInWithPassword({ email, password });
-      if (err) { setError(err.message); }
+      if (err) { setError(err.message === "Email not confirmed" ? "Please check your email and confirm your account first." : err.message); }
     }
     setLoading(false);
   }
-
-  if (confirmSent) return (
-    <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24, textAlign: "center" }}>
-      <div style={{ fontSize: 32, marginBottom: 16 }}>✉️</div>
-      <div style={{ fontSize: 18, color: "#f0ede6", marginBottom: 8 }}>Check your email</div>
-      <div style={{ fontSize: 13, color: "#444", maxWidth: 280, lineHeight: 1.7 }}>We sent a confirmation link to <span style={{ color: "#4ade80" }}>{email}</span>. Click it to activate your account, then come back and log in.</div>
-      <button onClick={() => { setConfirmSent(false); setMode("login"); }} style={{ marginTop: 24, background: "none", border: "1px solid #1e1e1e", color: "#4ade80", padding: "10px 24px", borderRadius: 8, fontSize: 13, cursor: "pointer", letterSpacing: 1 }}>Back to login</button>
-    </div>
-  );
 
   return (
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
@@ -493,7 +487,19 @@ export default function App() {
   }, []);
 
   async function loadProfile(userId) {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    let { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    if (!data) {
+      const { data: authData } = await supabase.auth.getUser();
+      const meta = authData?.user?.user_metadata || {};
+      const fallbackName = meta.full_name || authData?.user?.email?.split("@")[0] || "Brother";
+      await supabase.from("profiles").upsert({
+        id: userId, full_name: fallbackName,
+        is_challenge: meta.is_challenge || false,
+        is_leader: false, current_day: 1
+      });
+      const res = await supabase.from("profiles").select("*").eq("id", userId).single();
+      data = res.data;
+    }
     if (data) { setProfile(data); setScreen("pick"); loadMyCheckins(userId); }
     else setScreen("auth");
   }
