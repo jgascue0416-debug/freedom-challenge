@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -153,7 +153,29 @@ function AuthScreen({ onAuth }) {
 }
 
 // ─── Role Picker ──────────────────────────────────────────────────────────────
+const LEADER_PIN = "123456";
+
 function RolePicker({ profile, onPick, onSignOut }) {
+  const [showPin, setShowPin] = React.useState(false);
+  const [pin, setPin] = React.useState("");
+  const [pinError, setPinError] = React.useState(false);
+
+  function handleLeaderClick() {
+    setShowPin(true);
+    setPin("");
+    setPinError(false);
+  }
+
+  function handlePinSubmit() {
+    if (pin === LEADER_PIN) {
+      setShowPin(false);
+      onPick("leader");
+    } else {
+      setPinError(true);
+      setPin("");
+    }
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
       <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>30-Day Freedom Challenge</div>
@@ -164,12 +186,34 @@ function RolePicker({ profile, onPick, onSignOut }) {
           <div style={{ fontSize: 14, color: "#4ade80", letterSpacing: 0.5, marginBottom: 5 }}>My daily check-in</div>
           <div style={{ fontSize: 12, color: "#6abf88", lineHeight: 1.5 }}>Log today, track your streak, read Scripture</div>
         </button>
-        <button onClick={() => onPick("leader")} style={{ background: "#0b1220", border: "1px solid #1a2a40", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
+        <button onClick={handleLeaderClick} style={{ background: "#0b1220", border: "1px solid #1a2a40", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
           <div style={{ fontSize: 14, color: "#60a5fa", letterSpacing: 0.5, marginBottom: 5 }}>Leader dashboard</div>
           <div style={{ fontSize: 12, color: "#6a9abf", lineHeight: 1.5 }}>View all brothers, progress, and challenge funds</div>
         </button>
       </div>
       <button onClick={onSignOut} style={{ marginTop: 32, background: "none", border: "none", color: "#888", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>Sign out</button>
+
+      {showPin && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+          <div style={{ background: "#0e1420", border: "1px solid #1a2a40", borderRadius: 16, padding: 32, width: "100%", maxWidth: 280, textAlign: "center" }}>
+            <div style={{ fontSize: 11, letterSpacing: 3, color: "#60a5fa", textTransform: "uppercase", marginBottom: 12 }}>Leader access</div>
+            <div style={{ fontSize: 14, color: "#aaa", marginBottom: 20 }}>Enter your PIN to continue</div>
+            <input
+              type="password"
+              value={pin}
+              onChange={e => { setPin(e.target.value); setPinError(false); }}
+              onKeyDown={e => e.key === "Enter" && handlePinSubmit()}
+              placeholder="PIN"
+              maxLength={6}
+              autoFocus
+              style={{ width: "100%", background: "#111", border: `1px solid ${pinError ? "#f87171" : "#1e1e1e"}`, borderRadius: 10, padding: "12px 16px", color: "#f0ede6", fontSize: 18, fontFamily: "Georgia, serif", textAlign: "center", letterSpacing: 4, marginBottom: 8, boxSizing: "border-box" }}
+            />
+            {pinError && <div style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>Incorrect PIN</div>}
+            <button onClick={handlePinSubmit} style={{ width: "100%", background: "#14532d", border: "none", color: "#4ade80", borderRadius: 10, padding: 13, fontSize: 14, cursor: "pointer", fontFamily: "Georgia, serif", marginBottom: 10 }}>Enter</button>
+            <button onClick={() => setShowPin(false)} style={{ background: "none", border: "none", color: "#555", fontSize: 12, cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
