@@ -69,7 +69,7 @@ function Spinner({ color = "#4ade80" }) {
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <div style={{ width: 32, height: 32, border: "2px solid #1a1a1a", borderTop: `2px solid ${color}`, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={{ fontSize: 12, color: "#333", letterSpacing: 2, fontFamily: "Georgia, serif" }}>Loading...</div>
+      <div style={{ fontSize: 12, color: "#888", letterSpacing: 2, fontFamily: "Georgia, serif" }}>Loading...</div>
     </div>
   );
 }
@@ -113,7 +113,7 @@ function AuthScreen({ onAuth }) {
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
       <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>30-Day Freedom Challenge</div>
       <div style={{ fontSize: 22, color: "#f0ede6", marginBottom: 6 }}>Walking in the Spirit</div>
-      <div style={{ fontSize: 13, color: "#444", marginBottom: 32, textAlign: "center", maxWidth: 280, lineHeight: 1.7 }}>
+      <div style={{ fontSize: 13, color: "#aaa", marginBottom: 32, textAlign: "center", maxWidth: 280, lineHeight: 1.7 }}>
         {mode === "login" ? "Sign in to your account to continue your journey." : "Create your account to begin the challenge."}
       </div>
       <div style={{ width: "100%", maxWidth: 300 }}>
@@ -133,7 +133,7 @@ function AuthScreen({ onAuth }) {
             <div style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${isChallenge ? "#fbbf24" : "#2a2a2a"}`, background: isChallenge ? "#3d2a00" : "#111", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               {isChallenge && <div style={{ width: 10, height: 10, background: "#fbbf24", borderRadius: 2 }} />}
             </div>
-            <span style={{ fontSize: 12, color: "#666", lineHeight: 1.5 }}>I'm on the $100/day money challenge</span>
+            <span style={{ fontSize: 12, color: "#aaa", lineHeight: 1.5 }}>I'm on the $100/day money challenge</span>
           </label>
         )}
         {error && <div style={{ color: "#f87171", fontSize: 12, marginBottom: 12, textAlign: "center" }}>{error}</div>}
@@ -141,7 +141,7 @@ function AuthScreen({ onAuth }) {
           style={{ width: "100%", background: "#14532d", border: "none", color: "#4ade80", borderRadius: 10, padding: 15, fontSize: 14, cursor: loading ? "default" : "pointer", letterSpacing: 1, fontFamily: "Georgia, serif", opacity: loading ? 0.7 : 1, marginBottom: 14 }}>
           {loading ? "Please wait..." : mode === "login" ? "Sign in →" : "Create account →"}
         </button>
-        <div style={{ textAlign: "center", fontSize: 12, color: "#444" }}>
+        <div style={{ textAlign: "center", fontSize: 12, color: "#aaa" }}>
           {mode === "login" ? "No account yet? " : "Already have an account? "}
           <span onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }} style={{ color: "#4ade80", cursor: "pointer" }}>
             {mode === "login" ? "Sign up" : "Sign in"}
@@ -158,18 +158,18 @@ function RolePicker({ profile, onPick, onSignOut }) {
     <div style={{ minHeight: "100vh", background: "#080a0e", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "Georgia, serif", padding: 24 }}>
       <div style={{ fontSize: 10, letterSpacing: 4, color: "#4ade80", textTransform: "uppercase", marginBottom: 10 }}>30-Day Freedom Challenge</div>
       <div style={{ fontSize: 20, color: "#f0ede6", marginBottom: 4 }}>Welcome, {profile?.full_name}</div>
-      <div style={{ fontSize: 13, color: "#444", marginBottom: 36 }}>Choose your view</div>
+      <div style={{ fontSize: 13, color: "#aaa", marginBottom: 36 }}>Choose your view</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 300 }}>
         <button onClick={() => onPick("brother")} style={{ background: "#0a1f10", border: "1px solid #1a4a28", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
           <div style={{ fontSize: 14, color: "#4ade80", letterSpacing: 0.5, marginBottom: 5 }}>My daily check-in</div>
-          <div style={{ fontSize: 12, color: "#1a4020", lineHeight: 1.5 }}>Log today, track your streak, read Scripture</div>
+          <div style={{ fontSize: 12, color: "#6abf88", lineHeight: 1.5 }}>Log today, track your streak, read Scripture</div>
         </button>
         <button onClick={() => onPick("leader")} style={{ background: "#0b1220", border: "1px solid #1a2a40", borderRadius: 12, padding: "20px", cursor: "pointer", textAlign: "left" }}>
           <div style={{ fontSize: 14, color: "#60a5fa", letterSpacing: 0.5, marginBottom: 5 }}>Leader dashboard</div>
-          <div style={{ fontSize: 12, color: "#1a2a40", lineHeight: 1.5 }}>View all brothers, progress, and challenge funds</div>
+          <div style={{ fontSize: 12, color: "#6a9abf", lineHeight: 1.5 }}>View all brothers, progress, and challenge funds</div>
         </button>
       </div>
-      <button onClick={onSignOut} style={{ marginTop: 32, background: "none", border: "none", color: "#333", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>Sign out</button>
+      <button onClick={onSignOut} style={{ marginTop: 32, background: "none", border: "none", color: "#888", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>Sign out</button>
     </div>
   );
 }
@@ -215,8 +215,8 @@ function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid #141414", background: "#0a0a0a", position: "sticky", top: 0, zIndex: 10 }}>
         <div style={{ fontSize: 11, color: "#4ade80", letterSpacing: 1 }}>{profile?.full_name}</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => onSwitch("pick")} style={{ background: "none", border: "1px solid #1e1e1e", color: "#444", padding: "4px 10px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Switch</button>
-          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
+          <button onClick={() => onSwitch("pick")} style={{ background: "none", border: "1px solid #1e1e1e", color: "#aaa", padding: "4px 10px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Switch</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#888", fontSize: 10, cursor: "pointer" }}>Sign out</button>
         </div>
       </div>
       <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #141414" }}>
@@ -225,13 +225,13 @@ function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
         {isChallenge && <div style={{ marginTop: 6, display: "inline-block", background: "#2a1a00", border: "1px solid #4a3000", borderRadius: 999, padding: "3px 12px", fontSize: 11, color: "#fbbf24" }}>💰 ${completedCount * 100} deposited of $3,000</div>}
         <div style={{ display: "flex", gap: 24, marginTop: 12 }}>
           {[["Streak", streak], ["Complete", completedCount], ["Remaining", 30 - completedCount]].map(([l, v]) => (
-            <div key={l}><div style={{ fontSize: 20, color: "#4ade80" }}>{v}</div><div style={{ fontSize: 10, letterSpacing: 2, color: "#444", textTransform: "uppercase" }}>{l}</div></div>
+            <div key={l}><div style={{ fontSize: 20, color: "#4ade80" }}>{v}</div><div style={{ fontSize: 10, letterSpacing: 2, color: "#aaa", textTransform: "uppercase" }}>{l}</div></div>
           ))}
         </div>
       </div>
       <div style={{ display: "flex", borderBottom: "1px solid #141414", padding: "0 20px" }}>
         {[["today","Today"],["streak","Streak"],["log","Log"]].map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", color: tab === id ? "#4ade80" : "#555", fontSize: 13, padding: "12px 14px", cursor: "pointer", borderBottom: tab === id ? "2px solid #4ade80" : "2px solid transparent", letterSpacing: 1 }}>{label}</button>
+          <button key={id} onClick={() => setTab(id)} style={{ background: "none", border: "none", color: tab === id ? "#4ade80" : "#aaa", fontSize: 13, padding: "12px 14px", cursor: "pointer", borderBottom: tab === id ? "2px solid #4ade80" : "2px solid transparent", letterSpacing: 1 }}>{label}</button>
         ))}
       </div>
       <div style={{ padding: "20px 20px 0" }}>
@@ -252,16 +252,16 @@ function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 12 }}>How are you today?</div>
+                <div style={{ fontSize: 10, letterSpacing: 3, color: "#aaa", textTransform: "uppercase", marginBottom: 12 }}>How are you today?</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
                   {MOODS.map(m => (
                     <button key={m.key} onClick={() => setMood(m.key)} style={{ background: mood === m.key ? "#0a1f10" : "#111", border: `1px solid ${mood === m.key ? m.color : "#1e1e1e"}`, borderRadius: 10, padding: "12px 8px", cursor: "pointer", textAlign: "center" }}>
                       <div style={{ fontSize: 20, marginBottom: 4 }}>{m.icon}</div>
-                      <div style={{ fontSize: 11, color: mood === m.key ? m.color : "#666" }}>{m.label}</div>
+                      <div style={{ fontSize: 11, color: mood === m.key ? m.color : "#aaa" }}>{m.label}</div>
                     </button>
                   ))}
                 </div>
-                <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 8 }}>Reflection (optional)</div>
+                <div style={{ fontSize: 10, letterSpacing: 3, color: "#aaa", textTransform: "uppercase", marginBottom: 8 }}>Reflection (optional)</div>
                 <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="What's on your heart today..."
                   style={{ width: "100%", background: "#111", border: "1px solid #1e1e1e", borderRadius: 10, padding: 12, color: "#c8c4bc", fontSize: 13, fontFamily: "Georgia, serif", lineHeight: 1.6, minHeight: 80, resize: "vertical", marginBottom: 16, boxSizing: "border-box" }} />
                 {!temptationVerse
@@ -281,26 +281,26 @@ function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
         )}
         {tab === "streak" && (
           <div>
-            <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 14 }}>30-day journey</div>
+            <div style={{ fontSize: 10, letterSpacing: 3, color: "#aaa", textTransform: "uppercase", marginBottom: 14 }}>30-day journey</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 5, marginBottom: 16 }}>
               {Array.from({ length: 30 }, (_, i) => i + 1).map(d => {
                 const c = checkins.find(x => x.day_number === d);
                 const done = c?.complete, temp = c?.temptation && !done, isToday = d === currentDay;
-                return <div key={d} style={{ aspectRatio: "1", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, background: done ? "#0f2d18" : temp ? "#2d1a08" : "#111", border: `${isToday ? 2 : 1}px solid ${done ? "#1a4a28" : temp ? "#4a2a10" : isToday ? "#4ade80" : "#1e1e1e"}`, color: done ? "#4ade80" : temp ? "#d97706" : "#333" }}>{d}</div>;
+                return <div key={d} style={{ aspectRatio: "1", borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, background: done ? "#0f2d18" : temp ? "#2d1a08" : "#111", border: `${isToday ? 2 : 1}px solid ${done ? "#1a4a28" : temp ? "#4a2a10" : isToday ? "#4ade80" : "#1e1e1e"}`, color: done ? "#4ade80" : temp ? "#d97706" : "#888" }}>{d}</div>;
               })}
             </div>
             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
               {[["#0f2d18","#1a4a28","Complete"],["#2d1a08","#4a2a10","Temptation"],["#111","#1e1e1e","Upcoming"]].map(([bg,b,l]) => (
-                <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#555" }}><div style={{ width: 11, height: 11, borderRadius: 3, background: bg, border: `1px solid ${b}` }} />{l}</div>
+                <div key={l} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#aaa" }}><div style={{ width: 11, height: 11, borderRadius: 3, background: bg, border: `1px solid ${b}` }} />{l}</div>
               ))}
             </div>
           </div>
         )}
         {tab === "log" && (
           <div>
-            <div style={{ fontSize: 10, letterSpacing: 3, color: "#444", textTransform: "uppercase", marginBottom: 14 }}>Your journey</div>
+            <div style={{ fontSize: 10, letterSpacing: 3, color: "#aaa", textTransform: "uppercase", marginBottom: 14 }}>Your journey</div>
             {checkins.filter(c => c.complete || c.temptation).length === 0
-              ? <div style={{ color: "#333", fontSize: 14, fontStyle: "italic" }}>No entries yet. Your story begins today.</div>
+              ? <div style={{ color: "#888", fontSize: 14, fontStyle: "italic" }}>No entries yet. Your story begins today.</div>
               : [...checkins].filter(c => c.complete || c.temptation).sort((a,b)=>b.day_number-a.day_number).map(c => (
                 <div key={c.day_number} style={{ borderBottom: "1px solid #1a1a1a", paddingBottom: 14, marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
@@ -311,7 +311,7 @@ function BrotherView({ profile, checkins, onSave, onSwitch, onSignOut }) {
                     </div>
                   </div>
                   {c.note ? <div style={{ fontSize: 12, color: "#778", fontStyle: "italic", lineHeight: 1.6, paddingLeft: 8, borderLeft: "2px solid #1a2a1a" }}>{c.note}</div>
-                    : <div style={{ fontSize: 11, color: "#333", fontStyle: "italic" }}>No reflection added.</div>}
+                    : <div style={{ fontSize: 11, color: "#888", fontStyle: "italic" }}>No reflection added.</div>}
                 </div>
               ))}
           </div>
@@ -347,7 +347,7 @@ function LeaderView({ profiles, allCheckins, onRefresh, onSwitch, onSignOut }) {
       <div style={{ fontFamily: "Georgia, serif", color: "#e8eaf0", minHeight: "100vh", background: "#080c14", paddingBottom: 80 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 20px", borderBottom: "1px solid #10151f", background: "#080c14", position: "sticky", top: 0, zIndex: 10 }}>
           <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", color: "#60a5fa", fontSize: 12, cursor: "pointer" }}>← All brothers</button>
-          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#888", fontSize: 10, cursor: "pointer" }}>Sign out</button>
         </div>
         <div style={{ padding: "20px 20px 0" }}>
           <div style={{ fontSize: 10, letterSpacing: 4, color: "#60a5fa", textTransform: "uppercase", marginBottom: 4 }}>Brother detail</div>
@@ -401,7 +401,7 @@ function LeaderView({ profiles, allCheckins, onRefresh, onSwitch, onSignOut }) {
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={onRefresh} style={{ background: "none", border: "1px solid #1a2540", color: "#60a5fa", padding: "4px 12px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Refresh</button>
           <button onClick={() => onSwitch("pick")} style={{ background: "none", border: "1px solid #1a2540", color: "#334", padding: "4px 10px", borderRadius: 6, fontSize: 10, cursor: "pointer" }}>Switch</button>
-          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#333", fontSize: 10, cursor: "pointer" }}>Sign out</button>
+          <button onClick={onSignOut} style={{ background: "none", border: "none", color: "#888", fontSize: 10, cursor: "pointer" }}>Sign out</button>
         </div>
       </div>
       <div style={{ padding: "20px 20px 0" }}>
